@@ -1,0 +1,5 @@
+Un pequeño gestor de tareas web.
+
+Permite añadir tareas y ordenarlas en una lista arrastrándolas con el ratón.
+
+Persistencia en base de datos, Java Server Faces y jQuery.
