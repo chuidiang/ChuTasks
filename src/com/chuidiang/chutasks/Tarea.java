@@ -1,14 +1,24 @@
 package com.chuidiang.chutasks;
 
-import javax.faces.bean.ManagedBean;
-
-@ManagedBean
 public class Tarea {
    private int id;
    private int estado;
    private String proyecto;
    private String persona;
    private String descripcion;
+   private boolean editable = false;
+
+   public void save() {
+      System.out.println(estado);
+   }
+
+   public boolean isEditable() {
+      return editable;
+   }
+
+   public void setEditable(boolean editable) {
+      this.editable = editable;
+   }
 
    public int getId() {
       return id;

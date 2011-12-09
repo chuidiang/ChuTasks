@@ -9,26 +9,29 @@ import java.sql.Statement;
 import java.util.LinkedList;
 import java.util.List;
 
-import javax.faces.bean.ApplicationScoped;
 import javax.faces.bean.ManagedBean;
+import javax.faces.bean.SessionScoped;
 import javax.sql.DataSource;
 
 import org.apache.tomcat.dbcp.dbcp.BasicDataSource;
 
 @ManagedBean
-@ApplicationScoped
+@SessionScoped
 public class Dao {
-   private DataSource dataSource = null;
+   private static DataSource dataSource = null;
    private boolean tablasCreadas = false;
+   private LinkedList<Tarea> lista = null;
 
    public Dao() {
-      BasicDataSource basicDataSource = new BasicDataSource();
-      basicDataSource.setDriverClassName("com.mysql.jdbc.Driver");
-      basicDataSource.setUrl("jdbc:mysql://localhost:3306/chutasks");
-      basicDataSource.setPassword("");
-      basicDataSource.setUsername("root");
+      if (null == dataSource) {
+         BasicDataSource basicDataSource = new BasicDataSource();
+         basicDataSource.setDriverClassName("com.mysql.jdbc.Driver");
+         basicDataSource.setUrl("jdbc:mysql://localhost:3306/chutasks");
+         basicDataSource.setPassword("");
+         basicDataSource.setUsername("root");
 
-      dataSource = basicDataSource;
+         dataSource = basicDataSource;
+      }
    }
 
    public void creaTablas() {
@@ -84,10 +87,13 @@ public class Dao {
    }
 
    public List<Tarea> getTareas() {
+      if (null != lista) {
+         return lista;
+      }
       Connection conexion = null;
       ResultSet rs = null;
       PreparedStatement ps = null;
-      LinkedList<Tarea> listaTaras = new LinkedList<Tarea>();
+      LinkedList<Tarea> listaTareas = new LinkedList<Tarea>();
       try {
          creaTablas();
 
@@ -101,7 +107,7 @@ public class Dao {
             unaTarea.setEstado(rs.getInt("estado"));
             unaTarea.setPersona(rs.getString("persona"));
             unaTarea.setProyecto(rs.getString("proyecto"));
-            listaTaras.add(unaTarea);
+            listaTareas.add(unaTarea);
          }
       } catch (Exception e) {
          e.printStackTrace();
@@ -125,7 +131,8 @@ public class Dao {
             e.printStackTrace();
          }
       }
-      return listaTaras;
+      lista = listaTareas;
+      return listaTareas;
    }
 
    public void addTarea(Tarea unaTarea) {
@@ -153,6 +160,65 @@ public class Dao {
             conexion.close();
          } catch (Exception e) {
             // TODO Auto-generated catch block
+            e.printStackTrace();
+         }
+      }
+   }
+
+   public void removeTarea(Tarea tarea) {
+      Connection conexion = null;
+      PreparedStatement ps = null;
+      try {
+         conexion = dataSource.getConnection();
+         ps = conexion.prepareStatement("delete from tarea where id = ?");
+         ps.setInt(1, tarea.getId());
+         ps.executeUpdate();
+      } catch (Exception e) {
+         e.printStackTrace();
+      } finally {
+         try {
+            ps.close();
+         } catch (SQLException e) {
+            e.printStackTrace();
+         }
+         try {
+            conexion.close();
+         } catch (SQLException e) {
+            e.printStackTrace();
+         }
+      }
+   }
+
+   public void editAction(Tarea tarea) {
+      tarea.setEditable(true);
+   }
+
+   public void saveAction(Tarea tarea) {
+      tarea.setEditable(false);
+      Connection conexion = null;
+      PreparedStatement ps = null;
+      try {
+         conexion = dataSource.getConnection();
+         ps = conexion
+               .prepareStatement("update tarea set proyecto=?, persona=?, descripcion=?, estado=? where id = ?");
+         ps.setString(1, tarea.getProyecto());
+         ps.setString(2, tarea.getPersona());
+         ps.setString(3, tarea.getDescripcion());
+         ps.setInt(4, tarea.getEstado());
+         ps.setInt(5, tarea.getId());
+         ps.executeUpdate();
+
+      } catch (Exception e) {
+         e.printStackTrace();
+      } finally {
+         try {
+            ps.close();
+         } catch (SQLException e) {
+            e.printStackTrace();
+         }
+         try {
+            conexion.close();
+         } catch (SQLException e) {
             e.printStackTrace();
          }
       }
