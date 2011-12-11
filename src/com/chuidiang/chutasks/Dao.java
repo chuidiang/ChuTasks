@@ -9,17 +9,14 @@ import java.sql.Statement;
 import java.util.LinkedList;
 import java.util.List;
 
-import javax.faces.bean.ManagedBean;
-import javax.faces.bean.SessionScoped;
 import javax.sql.DataSource;
 
 import org.apache.tomcat.dbcp.dbcp.BasicDataSource;
 
-@ManagedBean
-@SessionScoped
 public class Dao {
    private static DataSource dataSource = null;
    private boolean tablasCreadas = false;
+   private Tarea tareaEnEdicion = null;
    private LinkedList<Tarea> lista = null;
 
    public Dao() {
@@ -34,6 +31,43 @@ public class Dao {
       }
    }
 
+   public void ordena(String orden) {
+      String[] indicesOrdenados = orden.split(",");
+      int contador = 1;
+      Connection conexion = null;
+      PreparedStatement ps = null;
+
+      try {
+         conexion = dataSource.getConnection();
+         ps = conexion.prepareStatement("update tarea set orden=? where id=?");
+         for (String unIndice : indicesOrdenados) {
+            int indice = Integer.parseInt(unIndice);
+            for (Tarea tarea : lista) {
+               if (tarea.getId() == indice) {
+                  ps.setInt(1, contador);
+                  ps.setInt(2, indice);
+                  ps.executeUpdate();
+                  break;
+               }
+            }
+            contador++;
+         }
+      } catch (Exception e) {
+         e.printStackTrace();
+      } finally {
+         try {
+            ps.close();
+         } catch (SQLException e) {
+            e.printStackTrace();
+         }
+         try {
+            conexion.close();
+         } catch (SQLException e) {
+            e.printStackTrace();
+         }
+      }
+   }
+
    public void creaTablas() {
       if (existeTabla()) {
          return;
@@ -44,7 +78,10 @@ public class Dao {
       try {
          conexion = dataSource.getConnection();
          st = conexion.createStatement();
-         st.executeUpdate("create table tarea (id integer not null auto_increment, primary key(id), proyecto varchar(64), persona varchar(64), descripcion varchar(1024), estado tinyint default 0)");
+         st.executeUpdate("create table tarea (id integer not null auto_increment, "
+               + "primary key(id), proyecto varchar(64), persona varchar(64), "
+               + "descripcion varchar(1024), estado tinyint default 0, "
+               + "orden int default 10000)");
          tablasCreadas = true;
       } catch (Exception e) {
          e.printStackTrace();
@@ -87,18 +124,17 @@ public class Dao {
    }
 
    public List<Tarea> getTareas() {
-      if (null != lista) {
-         return lista;
-      }
       Connection conexion = null;
       ResultSet rs = null;
       PreparedStatement ps = null;
       LinkedList<Tarea> listaTareas = new LinkedList<Tarea>();
+      lista = listaTareas;
       try {
          creaTablas();
 
          conexion = dataSource.getConnection();
-         ps = conexion.prepareStatement("select * from tarea");
+         ps = conexion
+               .prepareStatement("select * from tarea order by orden asc");
          rs = ps.executeQuery();
          while (rs.next()) {
             Tarea unaTarea = new Tarea();
@@ -107,6 +143,11 @@ public class Dao {
             unaTarea.setEstado(rs.getInt("estado"));
             unaTarea.setPersona(rs.getString("persona"));
             unaTarea.setProyecto(rs.getString("proyecto"));
+            if (null != tareaEnEdicion) {
+               if (tareaEnEdicion.getId() == unaTarea.getId()) {
+                  unaTarea.setEditable(true);
+               }
+            }
             listaTareas.add(unaTarea);
          }
       } catch (Exception e) {
@@ -115,24 +156,21 @@ public class Dao {
          try {
             rs.close();
          } catch (Exception e) {
-            // TODO Auto-generated catch block
             e.printStackTrace();
          }
          try {
             ps.close();
          } catch (Exception e) {
-            // TODO Auto-generated catch block
             e.printStackTrace();
          }
          try {
             conexion.close();
          } catch (Exception e) {
-            // TODO Auto-generated catch block
             e.printStackTrace();
          }
       }
       lista = listaTareas;
-      return listaTareas;
+      return lista;
    }
 
    public void addTarea(Tarea unaTarea) {
@@ -141,11 +179,13 @@ public class Dao {
       try {
          conexion = dataSource.getConnection();
          ps = conexion
-               .prepareStatement("insert into tarea (proyecto, persona, descripcion, estado) values (?,?,?,?)");
+               .prepareStatement("insert into tarea (proyecto, persona, descripcion, estado, orden) "
+                     + "values (?,?,?,?,?)");
          ps.setString(1, unaTarea.getProyecto());
          ps.setString(2, unaTarea.getPersona());
          ps.setString(3, unaTarea.getDescripcion());
          ps.setInt(4, unaTarea.getEstado());
+         ps.setInt(5, 10000);
          ps.executeUpdate();
       } catch (Exception e) {
          e.printStackTrace();
@@ -153,25 +193,51 @@ public class Dao {
          try {
             ps.close();
          } catch (Exception e) {
-            // TODO Auto-generated catch block
             e.printStackTrace();
          }
          try {
             conexion.close();
          } catch (Exception e) {
-            // TODO Auto-generated catch block
             e.printStackTrace();
          }
       }
    }
 
-   public void removeTarea(Tarea tarea) {
+   public void salvaTarea(String id, String proyecto, String persona,
+         String descripcion, String estado) {
+      try {
+         Tarea tarea = new Tarea();
+         if ((null != id) && (!"".equals(id))) {
+            tarea.setId(Integer.parseInt(id));
+         }
+         tarea.setProyecto(proyecto);
+         try {
+            tarea.setEstado(Integer.parseInt(estado.trim()));
+         } catch (Exception e2) {
+            tarea.setEstado(0);
+            e2.printStackTrace();
+         }
+         tarea.setPersona(persona);
+         tarea.setDescripcion(descripcion);
+
+         if ((null == id) || "".equals(id)) {
+            addTarea(tarea);
+         } else {
+            saveAction(tarea);
+         }
+      } catch (Exception e) {
+         e.printStackTrace();
+      }
+   }
+
+   public void borraTarea(String stringIdTarea) {
       Connection conexion = null;
       PreparedStatement ps = null;
       try {
+         int idTarea = Integer.parseInt(stringIdTarea);
          conexion = dataSource.getConnection();
          ps = conexion.prepareStatement("delete from tarea where id = ?");
-         ps.setInt(1, tarea.getId());
+         ps.setInt(1, idTarea);
          ps.executeUpdate();
       } catch (Exception e) {
          e.printStackTrace();
@@ -191,16 +257,19 @@ public class Dao {
 
    public void editAction(Tarea tarea) {
       tarea.setEditable(true);
+      tareaEnEdicion = tarea;
    }
 
    public void saveAction(Tarea tarea) {
       tarea.setEditable(false);
+      tareaEnEdicion = null;
       Connection conexion = null;
       PreparedStatement ps = null;
       try {
          conexion = dataSource.getConnection();
          ps = conexion
-               .prepareStatement("update tarea set proyecto=?, persona=?, descripcion=?, estado=? where id = ?");
+               .prepareStatement("update tarea set proyecto=?, persona=?, descripcion=?, "
+                     + "estado=? where id = ?");
          ps.setString(1, tarea.getProyecto());
          ps.setString(2, tarea.getPersona());
          ps.setString(3, tarea.getDescripcion());
